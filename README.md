@@ -13,8 +13,8 @@ FormKey	TemplateFormId	Title	Description	FormId	EditUrl	LiveUrl	FinalThankYouMes
 The Questions tab must have these columns:  
 FormKey	QuestionID	QuestionType	OtherOption	Validation	NewPage	QuestionText	Answer Option 1	Answer Option 2	Answer Option 3  
 Add any number of questions and answer options. Supported question types are Multiple Choice and Short Answer Text.  
-Questions will be added to the Google Form you specifiy in FormKey, in the order they appear in Questions tab.
+Questions will be added to the Google Forms you specifiy in FormKey, in the order they appear in Questions tab.
 
 The Responses tab must have these columns:  
 FormKey	QuestionID	RespondentId	Timestamp	Answer  
-Response data will be updated automatically here when the surveys runs.
+Response data will be updated periodically and automatically when the surveys runs.
