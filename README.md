@@ -7,14 +7,14 @@ This is a Google Cloud Platform Project using Google Apps Script, Sheets, and Fo
 
 Create a Google Sheet with three tabs named: Forms, Questions, and Responses.  
 
-The Forms tab must have columns:  
+The Forms tab must have these columns:  
 FormKey	TemplateFormId	Title	Description	FormId	EditUrl	LiveUrl	FinalThankYouMessage	Answers	Respondents	Redirects	MaxRedirects	LastRedirect	MaxRespondents	FailedControl	StillNeeded  
 
-The Questions tab must have columns:  
+The Questions tab must have these columns:  
 FormKey	QuestionID	QuestionType	OtherOption	Validation	NewPage	QuestionText	Answer Option 1	Answer Option 2	Answer Option 3  
-Here you add any number of questions and answer options. Supported question types are Multiple Choice and Short Answer Text.  
+Add any number of questions and answer options. Supported question types are Multiple Choice and Short Answer Text.  
 Questions will be added to the Google Form you specifiy in FormKey, in the order they appear in Questions tab.
 
-The Responses tab must have columns:  
+The Responses tab must have these columns:  
 FormKey	QuestionID	RespondentId	Timestamp	Answer  
 Response data will be updated automatically here when the surveys runs.
