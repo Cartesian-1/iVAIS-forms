@@ -1,0 +1,121 @@
+function doGet(e) {
+  // Entry point for the published web app; selects a form URL and redirects the requester.
+  var SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  var SHEET_NAME = 'Forms';
+
+  if (!SPREADSHEET_ID) {
+    return HtmlService.createHtmlOutput('Script property "SPREADSHEET_ID" is not configured.');
+  }
+
+  // Open the spreadsheet and worksheet that hold the routing data.
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) return HtmlService.createHtmlOutput('Sheet "Forms" not found.');
+
+  // Use a script lock to ensure only one request updates redirect counts at a time.
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000); // Wait up to 20s for concurrent traffic.
+    // Select the next eligible form row and increment its Redirects/LastRedirect metadata.
+    var result = selectAndIncrement_(sh);
+    if (!result) {
+      return HtmlService.createHtmlOutput('Unable to redirect to a form. Sorry for the inconvenience. Please wait awhile before trying again.');
+    }
+    // Redirect the requester to the selected form URL.
+    return htmlRedirect_(result.url);
+  } catch (err) {
+    // Surface any unexpected errors to aid troubleshooting.
+    return HtmlService.createHtmlOutput('Error: ' + err);
+  } finally {
+    // Always release the lock, even if an error occurred.
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+function htmlRedirect_(url) {
+  // Produces a minimal HTML page that immediately redirects the browser to the target URL.
+  var safe = encodeURI(String(url));
+  var html =
+    '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta http-equiv="refresh" content="0;url=' + safe + '">' +
+    '<title>Redirecting…</title></head><body>' +
+    '<p>If you are not redirected, <a href="' + safe + '">click here</a>.</p>' +
+    '</body></html>';
+
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .setTitle('Redirecting…');
+}
+
+function selectAndIncrement_(sheet) {
+  // Selects the best eligible form row, respecting redirect limits, and updates counters.
+  var values = sheet.getDataRange().getValues();
+  if (!values || values.length < 2) return null;
+
+  // Resolve header indexes for all required metadata columns.
+  var headers = values[0].map(function(h){ return String(h).trim(); });
+  var idxFormKey = indexOfHeader_(headers, 'FormKey');
+  var idxLiveUrl = indexOfHeader_(headers, 'LiveUrl');
+  var idxAnswers = indexOfHeader_(headers, 'Answers');
+  var idxRedirects = indexOfHeader_(headers, 'Redirects');
+  var idxMaxRedirects = indexOfHeader_(headers, 'MaxRedirects');
+  var idxLastRedirect = indexOfHeader_(headers, 'LastRedirect');
+
+  // Abort early if compulsory columns are missing.
+  if ([idxFormKey, idxLiveUrl, idxAnswers, idxRedirects, idxMaxRedirects].some(function(i){ return i < 0; })) {
+    throw 'Required headers not found. Need: FormKey, LiveUrl, Answers, Redirects, MaxRedirects';
+  }
+
+  var best = null; // Holds the candidate row with fewest answers that still has redirect capacity.
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+
+    var url = (row[idxLiveUrl] || '').toString().trim();
+    if (!url) continue;
+
+    var formKey = Number(row[idxFormKey]);
+    var answers = Number(row[idxAnswers]);
+    if (!isFinite(formKey) || !isFinite(answers)) continue;
+
+    var redirects = Number(row[idxRedirects] || 0);
+    var maxRedirects = Number(row[idxMaxRedirects] || 0);
+
+    // maxRedirects <= 0 means unlimited; otherwise enforce the cap.
+    var allowed = (maxRedirects <= 0) || (redirects < maxRedirects);
+    if (!allowed) continue;
+
+    if (!best ||
+        answers < best.answers ||
+        (answers === best.answers && formKey < best.formKey)) {
+      best = {
+        rowIndex: r,
+        url: url,
+        formKey: formKey,
+        answers: answers,
+        redirects: isFinite(redirects) ? redirects : 0
+      };
+    }
+  }
+
+  if (!best) return null;
+
+  // Persist the incremented Redirects count (and optional LastRedirect timestamp).
+  var rowNumber = best.rowIndex + 1;
+  var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+
+  sheet.getRange(rowNumber, idxRedirects + 1).setValue(best.redirects + 1);
+  if (idxLastRedirect >= 0) {
+    sheet.getRange(rowNumber, idxLastRedirect + 1).setValue(timestamp);
+  }
+
+  return { url: best.url };
+}
+
+function indexOfHeader_(headers, name) {
+  // Case-insensitive helper that returns the index of a header label, or -1 if absent.
+  var target = String(name).trim().toLowerCase();
+  for (var i = 0; i < headers.length; i++) {
+    if (String(headers[i]).trim().toLowerCase() === target) return i;
+  }
+  return -1;
+}
