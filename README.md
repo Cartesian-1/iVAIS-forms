@@ -64,10 +64,10 @@ This is the URL that must be shared with your users (and no one else) when they 
 
 The `forms-url` web app will automatically redirect users to one of the forms in the `Forms` tab of the main survey sheet.  
 One redirect form is selected by the following logic:  
--Form with lowest `Answers` number in the `Forms` tab of the main survey sheet (all forms will have 0 initially).  
--Form with lowest `FormKey` number.  
+-form with lowest `Answers` number in the `Forms` tab of the main survey sheet (all forms will have 0 initially).  
+-form with lowest `FormKey` number.  
 -`MaxRedirects` must be strictly greater than `Redirects` for a form to be considered for a redirect.  
--If no form can be chosen, the web app returns an error message.  
+-if no form can be chosen, the web app returns an error message.  
 
 # Building the forms
 
