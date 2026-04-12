@@ -46,7 +46,7 @@ Google might ask you to allow some Project OAuth Scopes permissions on first run
 
 # The forms-url script
 
-**The `forms-url` script is deployed as a web app with a single purpose: to redirect users to one of your form `LiveUrl`s.**  
+**The `forms-url` script is deployed as a web app with a single purpose: Redirect users to one of the forms in the Forms tab.**  
 
 Open the main survey sheet, go to Extensions > Apps Script and create a new Google Apps Script project.  
 Replace the code with the code from `cartesian-forms-url.txt` and save.
