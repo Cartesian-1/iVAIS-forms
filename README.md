@@ -12,18 +12,21 @@ The main survey sheet is where all data is stored: survey questions, forms data,
 
 Create a Google Sheet with three tabs named: `Forms`, `Questions`, and `Responses`.  
 
-- The `Forms` tab must have these columns:  
-`FormKey`	`TemplateFormId`	`Title`	`Description`	`FormId`	`EditUrl`	`LiveUrl`	`FinalThankYouMessage`	`Answers`	`Respondents`	`Redirects`	`MaxRedirects`	`LastRedirect`	`MaxRespondents`	`FailedControl`	`StillNeeded`  
+**The `Forms` tab must have these columns:**  
+`FormKey`	`TemplateFormId`	`Title`	`Description`	`FormId`	`EditUrl`	`LiveUrl`	`FinalThankYouMessage`  
+`Answers`	`Respondents`	`Redirects`	`MaxRedirects`	`LastRedirect`	`MaxRespondents`	`FailedControl`	`StillNeeded`  
 The first 8 columns are forms data, and the last 8 columns are for handling redirect logic and responses.
-The forms you want to build must be specified here including metadata.  
-Specify in `MaxRespondents` how many respondents you need for each form.
 
-- The `Questions` tab must have these columns:  
-`FormKey`	`QuestionID`	`QuestionType`	`OtherOption`	`Validation`	`NewPage`	`QuestionText`	`Answer Option 1`	`Answer Option 2`	`Answer Option 3`  
+The `Answers` column must contain this formula (I2 example): `=COUNTIF(Responses!$A:$A,$A2)`  
+The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the total number of questions in each form.  
+
+**The `Questions` tab must have these columns:**   
+`FormKey`	`QuestionID`	`QuestionType`	`OtherOption`	`Validation`	`NewPage`	`QuestionText`  
+`Answer Option 1`	`Answer Option 2`	`Answer Option 3`  
 All questions and answer options must be added here.   
 Questions will be added to the forms you specify in `FormKey`, in the order they appear in the sheet rows.  
 
-- The `Responses` tab must have these columns:  
+**The `Responses` tab must have these columns:**    
 `FormKey`	`QuestionID`	`RespondentId`	`Timestamp`	`Answer`  
 Response data will be updated periodically and automatically when the surveys runs.
 
@@ -65,20 +68,20 @@ One redirect form is selected by the following logic:
 -`MaxRedirects` must be strictly greater than `Redirects` for a form to be considered for a redirect.  
 -If no form can be chosen, the web app returns an error message.  
 
-# Building forms
+# Building the forms
 
-- Specify all forms metadata in the `Forms` tab of the main survey sheet:
+**Specify all forms metadata in the `Forms` tab of the main survey sheet:**  
 
 `FormKey`	 For each form you want to build, specify for each row a unique natural number in a rising sequence.  
 `TemplateFormId`	If you want to use a template for visual style, create a Google Forms template in the style you want, publish it, and enter the key after /spreadsheets/d/ in the template live URL.    
-`Title`	 Enter the forms title.  
+`Title`	 The form title.  
 `Description`	 An introductionary text on the first page of the form.  
 `FormId`	A unique form identifier. Leave this empty. It will be filled automatically by the `forms-main` script.  
 `EditUrl`	The URL to edit the Google Form. Leave this empty. It will be filled automatically by the `forms-main` script.  
 `LiveUrl`	The live URL to answer the Google Form. This is not normally used and should NOT be shared with users. Leave this empty. It will be filled automatically by the `forms-main` script.  
 `FinalThankYouMessage` An appreciative text message on the last page of the form.  
 
-- Add all your survey questions to the `Questions` tab in the main survey sheet:  
+**Add all your survey questions to the `Questions` tab in the main survey sheet:**    
 
 `FormKey`	The number you specify here is the form the question goes into.  
 `QuestionID` A unique question identifier.  
@@ -91,33 +94,45 @@ One redirect form is selected by the following logic:
 
 `Answer Option 1`	`Answer Option 2`	`Answer Option 3` The answer options for `Multiple Choice` questions.  
 Leave all three empty for `Short Answer Text` questions.  
-If a `Multiple Choice` question has fewer than three answer options, leave `Answer Option 2` and/or `Answer Option 3` empty.  
+If a `Multiple Choice` question has fewer than three answer options, leave `Answer Option 2` and/or `Answer Option 3` empty. 
 
-- When all forms metadata and all questions are ready, you can start building the Google Forms:
+In case you have a multiple choice control question with some `FormKey` (say 11) designed to disqualify some respondents (if they answer say 1 or 3) the `FailedControl` column in the `Forms` tab must contain this formula (O2 example):  
+`=countifs(Responses!$A:$A,$A2,Responses!$B:$B,11,Responses!$E:$E,1)+countifs(Responses!$A:$A,$A2,Responses!$B:$B,11,Responses!$E:$E,3`
+
+**When all forms metadata and all questions are ready, you can start building the Google Forms:**  
 
 The following functions are called manually from the functions menu of the `forms-main` script.
 
 `BuildFormsFromSheet` 
-This tries to build all the forms you have specified in the `Forms` tab, with the questions you have specified in `Questions`. 
-It is generally NOT recommended to run this, unless you have a small number of forms. It is likely to exceed the maximum time allowed for a function to run.  
+It is generally NOT recommended to run this function, unless you have a small number of forms. It tries to build all the forms at once, and it is likely to exceed the maximum time allowed for a function to run.  
 
-`buildNext10Forms` `buildNext2Forms` `buildNext3Forms` `buildNext5Forms`  
-These will build the next N forms you have specified in the `Forms` tab, with the questions you have specified in `Questions` tab.  
-`buildNext10Forms` is generally recommended for most purposes.
+`buildNext10Forms` `buildNext5Forms` `buildNext3Forms` `buildNext2Forms`      
+These functions will build the next 10, 5, 3, or 2 forms you have specified in the `Forms` tab, with the questions you have specified in `Questions` tab. Running `buildNext10Forms` repeatedly is generally recommended for most building purposes.
 
 `resetBuildBatchProgress`  
- Not normally used. This can be used to restart the building progress measure, if you need to restart the form building process.  
+Not normally used. Can be used to restart the building progress measure, if you need to restart the form building process.  
 
-`countGeneratedAndPublishedForms`  
-This can be used to check if all forms have been generated and published. Recommended to run before going live.
+**When all forms have been built, they must be published:**    
 
-
+Currently there is no way to publish forms automatically. You must click the `EditUrl` of each form and publish it manually.  
+Run the function `countGeneratedAndPublishedForms` to check if all forms have been generated and published.
 
 # Running the survey
 
-`resetResponseSyncState`  
-`setSyncBatchSize_25`  
-`setSyncBatchSize_3`  
-`getSyncBatchSettings`  
+Specify in the `MaxRespondents` column how many respondents you need for each form.
+
+Run the function `enable10minSync` in `forms-main` one hour before you start the survey. This will start the automated synchronization of responses which runs with a time based trigger every 10 minutes.  
+The batch size of forms that each synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`.  
+The function `getSyncBatchSettings` can be run if you want to know the current synchronization progress and batch size. 
+Only new responses will be synchronized. If you wish to re-synchronize all responses, run the function `resetResponseSyncState`.  
+
+Invite the respondents to your survey with the single `forms-url` web app URL link.  
+
+When users start visiting the web app URL, they will be redirected to one of the forms in the `Forms` tab. 
+Each time this happens, the `forms-url` script will update the columns `Redirects` and `LastRedirect` (timestamp). 
+
+ 
+  
+ 
 `enable10minSync`  
 `disable10minSync`  
