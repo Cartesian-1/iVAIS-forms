@@ -6,7 +6,7 @@ This is Google Cloud Platform Project using Google Apps Script, Google Sheets, a
 
 These tools were originally created as part of the iVAIS project.
 
-# Creating the main survey sheet
+# The main survey sheet
 
 The main survey sheet is where all data is stored: survey questions, forms data, form redirects, and responses.  
 
@@ -25,7 +25,7 @@ The Responses tab must have these columns:
 `FormKey`	`QuestionID`	`RespondentId`	`Timestamp`	`Answer`  
 Response data will be updated periodically and automatically when the surveys runs.
 
-# Creating the forms-main script
+# The forms-main script
 
 The forms-main script handles creating forms and collecting responses from answered forms.
 
@@ -42,7 +42,7 @@ Google might ask you to allow the following Project OAuth Scopes on first run:
 -View and manage your forms in Google Drive  
 -See, edit, create, and delete all your Google Sheets spreadsheets  
 
-# Creating the forms-url script
+# The forms-url script
 
 The forms-url script is deployed as a Web App with one single purpose: to redirect users to one of our survey forms.
 
