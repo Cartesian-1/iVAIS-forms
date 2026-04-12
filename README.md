@@ -19,6 +19,7 @@ The first 8 columns are forms data, and the last 8 columns are for handling redi
 
 The `Answers` column must contain this formula (I2 example): `=COUNTIF(Responses!$A:$A,$A2)`  
 The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the total number of questions in each form.  
+The `StillNeeded` column must contain this formula (P2 example): `=max($N2-$J2+$O2,0)`  
 
 **The `Questions` tab must have these columns:**   
 `FormKey`	`QuestionID`	`QuestionType`	`OtherOption`	`Validation`	`NewPage`	`QuestionText`  
@@ -96,8 +97,8 @@ One redirect form is selected by the following logic:
 Leave all three empty for `Short Answer Text` questions.  
 If a `Multiple Choice` question has fewer than three answer options, leave `Answer Option 2` and/or `Answer Option 3` empty. 
 
-In case you have a multiple choice control question with some `FormKey` (say 11) designed to disqualify some respondents (if they answer say 1 or 3) the `FailedControl` column in the `Forms` tab must contain this formula (O2 example):  
-`=countifs(Responses!$A:$A,$A2,Responses!$B:$B,11,Responses!$E:$E,1)+countifs(Responses!$A:$A,$A2,Responses!$B:$B,11,Responses!$E:$E,3`
+In case you have a control question with some `FormKey` (say 8) designed to disqualify some respondents (if they answer say 1 or 3), the `FailedControl` column in the `Forms` tab must contain this formula (O2 example):  
+`=countifs(Responses!$A:$A,$A2,Responses!$B:$B,8,Responses!$E:$E,1)+countifs(Responses!$A:$A,$A2,Responses!$B:$B,8,Responses!$E:$E,3`
 
 **When all forms metadata and all questions are ready, you can start building the Google Forms:**  
 
@@ -122,17 +123,17 @@ Run the function `countGeneratedAndPublishedForms` to check if all forms have be
 Specify in the `MaxRespondents` column how many respondents you need for each form.
 
 Run the function `enable10minSync` in `forms-main` one hour before you start the survey. This will start the automated synchronization of responses which runs with a time based trigger every 10 minutes.  
-The batch size of forms that each synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`.  
-The function `getSyncBatchSettings` can be run if you want to know the current synchronization progress and batch size. 
-Only new responses will be synchronized. If you wish to re-synchronize all responses, run the function `resetResponseSyncState`.  
+
+The batch size of forms that each synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`. The function `getSyncBatchSettings` can be run if you want to know the current synchronization progress and batch size.  
+Only new responses will be synchronized. If you wish to re-synchronize all responses, run `resetResponseSyncState`.  
 
 Invite the respondents to your survey with the single `forms-url` web app URL link.  
 
 When users start visiting the web app URL, they will be redirected to one of the forms in the `Forms` tab. 
-Each time this happens, the `forms-url` script will update the columns `Redirects` and `LastRedirect` (timestamp). 
+Each time this happens, the `forms-url` script will update the columns `Redirects` and `LastRedirect` (timestamp).  
 
- 
-  
- 
-`enable10minSync`  
-`disable10minSync`  
+The automated synchronization will update `MaxRedirects` for a form to allow more redirects if and only if:  
+-`StillNeeded` is greater than 0, and  
+-at least 30 minutes has passed since the `LastRedirect`timestamp.  
+
+The automated synchronization will stop if all values in the `StillNeeded` column are 0, or if you run the function `disable10minSync`.
