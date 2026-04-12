@@ -25,7 +25,7 @@ The `StillNeeded` column must contain this formula (P2 example): `=max($N2-$J2+$
 `FormKey`	`QuestionID`	`QuestionType`	`OtherOption`	`Validation`	`NewPage`	`QuestionText`  
 `Answer Option 1`	`Answer Option 2`	`Answer Option 3`  
 All questions and answer options must be added here.   
-Questions will be added to the forms you specify in `FormKey`, in the order they appear in the sheet rows.  
+Questions will be added to the forms you specify in `FormKey`, in the order they appear in these rows.  
 
 **The `Responses` tab must have these columns:**    
 `FormKey`	`QuestionID`	`RespondentId`	`Timestamp`	`Answer`  
