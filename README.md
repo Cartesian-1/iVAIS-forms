@@ -8,7 +8,7 @@ These tools were originally created as part of the iVAIS project.
 
 # The main survey sheet
 
-The main survey sheet is where all data is stored: survey questions, forms data, form redirects, and responses.  
+**The main survey sheet is where all data is stored: survey questions, forms data, form redirects, and responses.**    
 
 Create a Google Sheet with three tabs named: `Forms`, `Questions`, and `Responses`.  
 
@@ -33,7 +33,7 @@ Response data will be updated periodically and automatically when the surveys ru
 
 # The forms-main script
 
-The `forms-main` script handles creating forms and collecting responses from answered forms.
+**The `forms-main` script handles creating forms and collecting responses from answered forms.**  
 
 Open the main survey sheet, go to Extensions > Apps Script and create a new Google Apps Script project.  
 Replace the code with the code from `cartesian-forms-main.txt` and save. Do NOT click Deploy.  
@@ -46,7 +46,7 @@ Google might ask you to allow some Project OAuth Scopes permissions on first run
 
 # The forms-url script
 
-The `forms-url` script is deployed as a web app with one single purpose: to redirect users to one of your survey form URLs.
+**The `forms-url` script is deployed as a web app with a single purpose: to redirect users to one of your form `LiveUrl`s.**  
 
 Open the main survey sheet, go to Extensions > Apps Script and create a new Google Apps Script project.  
 Replace the code with the code from `cartesian-forms-url.txt` and save.
