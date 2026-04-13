@@ -105,8 +105,8 @@ If a `Multiple Choice` question has fewer than three answer options, leave `Answ
 
 **Control question**  
 
-In case you have a control question with some `FormKey` (say 8) designed to disqualify some respondents (if they answer say 1 or 3), the `FailedControl` column in the `Forms` tab must contain this formula (O2 example):  
-`=countifs(Responses!$A:$A,$A2,Responses!$B:$B,8,Responses!$E:$E,1)+countifs(Responses!$A:$A,$A2,Responses!$B:$B,8,Responses!$E:$E,3`
+In case you have a control question with some `FormKey` (say 87) designed to disqualify some respondents (if they answer say 1 or 3), the `FailedControl` column in the `Forms` tab must contain this formula (O2 example):  
+`=countifs(Responses!$A:$A,$A2,Responses!$B:$B,87,Responses!$E:$E,1)+countifs(Responses!$A:$A,$A2,Responses!$B:$B,87,Responses!$E:$E,3`
 
 **When all forms metadata and all questions are ready, you can start building the Google Forms:**  
 
