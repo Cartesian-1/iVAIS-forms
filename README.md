@@ -1,6 +1,6 @@
 # Introduction
 
-If you need to run surveys with very many questions - too many for one person to answer - these tools lets you split one large survey with any number of questions into smaller forms, and provides mechanisms for intelligent participant distribution and collecting responses.  
+If you need to run surveys with very many questions - too many for one person to answer - these tools lets you split one large survey with any number of questions into smaller forms, and provides mechanisms for logical participant distribution and collecting responses.  
 
 This is Google Cloud Platform Project using Google Apps Script, Google Sheets, and Google Forms. It could run on a personal Google account, depending on local area access, storage, quotas, and usage limits. This is an unofficial tool project and is not affiliated with Google.  
 
