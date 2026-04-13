@@ -36,7 +36,7 @@ Response data will be updated periodically and automatically when the surveys ru
 **The `forms-main` script handles creating forms and collecting responses from answered forms.**  
 
 Open the main survey sheet, go to Extensions > Apps Script and create a new Google Apps Script project.  
-Replace the code with the code from `cartesian-forms-main.txt` and save. Do NOT click Deploy.  
+Replace the code with the content of `cartesian-forms-main.txt` and save. Do NOT click Deploy.  
 
 Under Project Settings, make sure Chrome V8 runtime is enabled.  
 
@@ -49,7 +49,7 @@ Google might ask you to allow some Project OAuth Scopes permissions on first run
 **The `forms-url` script is deployed as a web app with one purpose: Redirect users to a form in the `Forms` tab**  
 
 Open the main survey sheet, go to Extensions > Apps Script and create a new Google Apps Script project.  
-Replace the code with the code from `cartesian-forms-url.txt` and save.
+Replace the code with the content of `cartesian-forms-url.txt` and save.
 
 Under Project Settings, make sure Chrome V8 runtime is enabled.  
 
