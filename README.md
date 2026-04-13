@@ -147,7 +147,7 @@ Each time this happens, the `forms-url` script will update the columns `Redirect
 
 The automated synchronization will update `MaxRedirects` for a form to allow more redirects if and only if:  
 -`StillNeeded` is greater than 0, and  
--at least 30 minutes has passed since the `LastRedirect`timestamp.  
+-at least 30 minutes has passed since the `LastRedirect` timestamp.  
 
 **Stop the survey** 
 
