@@ -123,7 +123,7 @@ Run the function `countGeneratedAndPublishedForms` to check if all forms have be
 
 Specify in the `MaxRespondents` column how many respondents you need for each form.  
 
-**Automated synchronizarion**
+**Automated synchronization**
 
 Run the function `enable10minSync` in `forms-main` one hour before you start the survey. This will start the automated synchronization of responses which runs with a time based trigger every 10 minutes.  
 
