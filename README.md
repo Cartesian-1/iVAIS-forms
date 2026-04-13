@@ -133,7 +133,8 @@ Specify in the `MaxRespondents` column how many respondents you need for each fo
 
 Run the function `enable10minSync` in `forms-main` one hour before you start the survey. This will start the automated synchronization of responses which runs with a time based trigger every 10 minutes.  
 
-The default batch size of forms that each synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`. The function `getSyncBatchSettings` can be run if you want to know the current synchronization progress and batch size.  
+The default batch size of forms that each synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`.  
+The function `getSyncBatchSettings` can be run if you want to know the current synchronization progress and batch size.  
 Only new responses will be synchronized. If you wish to re-synchronize all responses, run `resetResponseSyncState`.  
 
 **Start the survey** 
