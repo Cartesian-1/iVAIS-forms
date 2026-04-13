@@ -59,13 +59,12 @@ Deploy as type: Web app. Execute as: Me (your account). Who has access: Anyone.
 
 Google might ask you to allow some Project OAuth Scopes permissions on first run.  
 
+**Survey URL** 
+
 Under Deploy > Manage deployments > Web app URL you can copy the web app URL.  
 This is the URL that must be shared with your users (and no one else) when they take your survey.
 
-**Survey URL** 
-
 The `forms-url` web app will automatically redirect users to one of the forms in the `Forms` tab of the main survey sheet.  
-Use this for survey invite link.
 
 **Redirect logic**  
 
