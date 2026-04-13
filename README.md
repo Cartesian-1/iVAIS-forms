@@ -121,12 +121,16 @@ Run the function `countGeneratedAndPublishedForms` to check if all forms have be
 
 # Running the survey
 
-Specify in the `MaxRespondents` column how many respondents you need for each form.
+Specify in the `MaxRespondents` column how many respondents you need for each form.  
+
+**Automated synchronizarion**
 
 Run the function `enable10minSync` in `forms-main` one hour before you start the survey. This will start the automated synchronization of responses which runs with a time based trigger every 10 minutes.  
 
 The batch size of forms that each synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`. The function `getSyncBatchSettings` can be run if you want to know the current synchronization progress and batch size.  
 Only new responses will be synchronized. If you wish to re-synchronize all responses, run `resetResponseSyncState`.  
+
+**Start the survey** 
 
 Invite the respondents to your survey with the single `forms-url` web app URL link.  
 
@@ -136,5 +140,7 @@ Each time this happens, the `forms-url` script will update the columns `Redirect
 The automated synchronization will update `MaxRedirects` for a form to allow more redirects if and only if:  
 -`StillNeeded` is greater than 0, and  
 -at least 30 minutes has passed since the `LastRedirect`timestamp.  
+
+**Stop the survey** 
 
 The automated synchronization will stop if all values in the `StillNeeded` column are 0, or if you run the function `disable10minSync`.
