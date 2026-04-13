@@ -12,22 +12,22 @@ These tools were originally created as part of the iVAIS project.
 
 Create a Google Sheet with three tabs named: `Forms`, `Questions`, and `Responses`.  
 
-**The `Forms` tab must have these columns:**  
+**The `Forms` tab must have these column headers (A1-P1):**  
 `FormKey`	`TemplateFormId`	`Title`	`Description`	`FormId`	`EditUrl`	`LiveUrl`	`FinalThankYouMessage`  
 `Answers`	`Respondents`	`Redirects`	`MaxRedirects`	`LastRedirect`	`MaxRespondents`	`FailedControl`	`StillNeeded`  
 The first 8 columns are forms data, and the last 8 columns are for handling redirect logic and responses.
 
 The `Answers` column must contain this formula (I2 example): `=COUNTIF(Responses!$A:$A,$A2)`  
-The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the total number of questions in each form.  
-The `StillNeeded` column must contain this formula (P2 example): `=max($N2-$J2+$O2,0)`  
+The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the number of questions in the form.  
+The `StillNeeded` column must contain this formula (P2 example): `=MAX($N2-$J2+$O2,0)`  
 
-**The `Questions` tab must have these columns:**   
+**The `Questions` tab must have these column headers (A1-J1):**   
 `FormKey`	`QuestionID`	`QuestionType`	`OtherOption`	`Validation`	`NewPage`	`QuestionText`  
 `Answer Option 1`	`Answer Option 2`	`Answer Option 3`  
 All questions and answer options must be added here.   
 Questions will be added to the forms you specify in `FormKey`, in the order they appear in these rows.  
 
-**The `Responses` tab must have these columns:**    
+**The `Responses` tab must have these column headers (A1-E1):**    
 `FormKey`	`QuestionID`	`RespondentId`	`Timestamp`	`Answer`  
 Response data will be updated periodically and automatically when the surveys runs.
 
@@ -46,7 +46,7 @@ Google might ask you to allow some Project OAuth Scopes permissions on first run
 
 # The forms-url script
 
-**The `forms-url` script is deployed as a web app with one purpose: Redirect users to a form in the `Forms` tab**  
+**The `forms-url` script is deployed as a web app with one purpose: Redirect users to a form in the `Forms` tab.**  
 
 Open the main survey sheet, go to Extensions > Apps Script and create a new Google Apps Script project.  
 Replace the code with the content of `cartesian-forms-url.txt` and save.
@@ -62,13 +62,13 @@ Google might ask you to allow some Project OAuth Scopes permissions on first run
 **Survey URL** 
 
 Under Deploy > Manage deployments > Web app URL you can copy the web app URL.  
-This is the URL that must be shared with your users (and no one else) when they take your survey.
+This is the URL that must be shared with your users (and no one else) when they answer your survey.
 
 The `forms-url` web app will automatically redirect users to one of the forms in the `Forms` tab of the main survey sheet.  
 
 **Redirect logic**  
 
-One form is selected for a redirect by the following logic:  
+One form in `Forms` is selected for a redirect by the following logic:  
 -form with lowest `Answers` number in the `Forms` tab of the main survey sheet (all forms will have 0 initially).  
 -form with lowest `FormKey` number.  
 -`MaxRedirects` must be strictly greater than `Redirects` for a form to be considered for a redirect.  
@@ -79,7 +79,7 @@ One form is selected for a redirect by the following logic:
 **Specify all forms metadata in the `Forms` tab of the main survey sheet:**  
 
 `FormKey`	 For each form you want to build, specify for each row a unique natural number in a rising sequence.  
-`TemplateFormId`	If you want to use a template for visual style, create a Google Forms template in the style you want, publish it, and enter the key after /spreadsheets/d/ in the template live URL.    
+`TemplateFormId`	If you want to use a template for visual style, create a Google Forms template in that style, publish it, and enter the key after /spreadsheets/d/ in the template live URL.    
 `Title`	 The form title.  
 `Description`	 An introductionary text on the first page of the form.  
 `FormId`	A unique form identifier. Leave this empty. It will be filled automatically by the `forms-main` script.  
@@ -105,7 +105,7 @@ If a `Multiple Choice` question has fewer than three answer options, leave `Answ
 **Control question**  
 
 In case you have a control question with some `FormKey` (say 87) designed to disqualify some respondents (if they answer say 1 or 3), the `FailedControl` column in the `Forms` tab must contain this formula (O2 example):  
-`=countifs(Responses!$A:$A,$A2,Responses!$B:$B,87,Responses!$E:$E,1)+countifs(Responses!$A:$A,$A2,Responses!$B:$B,87,Responses!$E:$E,3`
+`=COUNTIFS(Responses!$A:$A,$A2,Responses!$B:$B,87,Responses!$E:$E,1)+COUNTIFS(Responses!$A:$A,$A2,Responses!$B:$B,87,Responses!$E:$E,3`
 
 **When all forms metadata and all questions are ready, you can start building the Google Forms:**  
 
@@ -131,18 +131,20 @@ Specify in the `MaxRespondents` column how many respondents you need for each fo
 
 **Automated synchronization**
 
-Run the function `enable10minSync` in `forms-main` one hour before you start the survey. This will start the automated synchronization of responses which runs with a time based trigger every 10 minutes.  
+Run the function `enable10minSync` in `forms-main` one hour before you start the survey. This will start the automated synchronization of responses which runs with a time based trigger every 10 minutes. 
 
-The default batch size of forms that each synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`.  
+Completed and submitted forms are added to the `Responses` tab in the main survey sheet. Partially answered forms are ignored.
+
+The default batch size of forms that each 10-minute synchronization updates is 20. The batch size can be changed to 3 or 25 by running the functions `setSyncBatchSize_3` or `setSyncBatchSize_25`.  
 Run the function `getSyncBatchSettings` if you want to know the current progress and batch size.  
 
 Only new responses will be synchronized. If you wish to re-synchronize all responses, run `resetResponseSyncState`.  
 
 **Start the survey** 
 
-Invite the respondents to your survey with the single `forms-url` web app URL link.  
+Invite the respondents to your survey with the single `forms-url` web app URL link as your survey invitation link.  
 
-When users start visiting the web app URL, they will be redirected to one of the forms in the `Forms` tab. 
+When your users visit the web app URL, they will be redirected to one of the forms in the `Forms` tab. 
 Each time this happens, the `forms-url` script will update the columns `Redirects` and `LastRedirect` (timestamp).  
 
 The automated synchronization will update `MaxRedirects` for forms in a batch to allow more redirects if and only if:  
