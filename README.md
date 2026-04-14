@@ -29,7 +29,7 @@ Questions will be added to the forms you specify in `FormKey`, in the order they
 
 **The `Responses` tab must have these column headers (A1-E1):**    
 `FormKey`	`QuestionID`	`RespondentId`	`Timestamp`	`Answer`  
-Response data will be updated periodically and automatically when the surveys runs.
+Response data will be updated here periodically and automatically when the surveys runs.
 
 # The forms-main script
 
