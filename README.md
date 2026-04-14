@@ -147,7 +147,7 @@ Invite the respondents to your survey with the single `forms-url` web app URL li
 When your users visit the web app URL, they will be redirected to one of the forms in the `Forms` tab. 
 Each time this happens, the `forms-url` script will update the columns `Redirects` and `LastRedirect` (timestamp).  
 
-The automated synchronization will update `MaxRedirects` for forms in a batch to allow more redirects if and only if:  
+The automated synchronization will update `MaxRedirects` for all forms in a batch to allow more redirects if and only if:  
 -`StillNeeded` is greater than 0, and  
 -at least 30 minutes has passed since the `LastRedirect` timestamp.  
 
