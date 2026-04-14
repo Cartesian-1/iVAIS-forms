@@ -1,0 +1,1015 @@
+function BuildFormsFromSheet() {
+const CFG = {
+SHEET_FORMS: 'Forms',
+SHEET_QUESTIONS: 'Questions',
+SHEET_RESPONSES: 'Responses',
+RESPONSES_HEADER: ['FormKey','QuestionID','RespondentId','Timestamp','Answer']
+};
+
+const props = PropertiesService.getScriptProperties();
+const hostId = props.getProperty('HOST_SPREADSHEET_ID');
+const ss = hostId ? SpreadsheetApp.openById(hostId) : SpreadsheetApp.getActiveSpreadsheet();
+// Only set the property if it isn’t already set
+if (!hostId) props.setProperty('HOST_SPREADSHEET_ID', ss.getId());
+
+const formsSheet = mustGetSheet_(ss, CFG.SHEET_FORMS);
+const questionsSheet = mustGetSheet_(ss, CFG.SHEET_QUESTIONS);
+const responsesSheet = ensureResponsesSheet_(ss, CFG.SHEET_RESPONSES, CFG.RESPONSES_HEADER);
+
+// Build a quick lookup: FormKey => hasAnyResponsesInSheet
+const respondedFormKeys = getRespondedFormKeysFromResponses_(responsesSheet);
+
+const formsHeader = getHeaderMap_(formsSheet);
+const formsRows = getDataRowsAsObjects_(formsSheet, formsHeader);
+
+const questionsHeader = getHeaderMap_(questionsSheet);
+const questionsRowsRaw = getDataRowsAsObjects_(questionsSheet, questionsHeader);
+
+// Group questions by FormKey
+const questionsByFormKey = {};
+for (const r of questionsRowsRaw) {
+const fk = (r['FormKey'] || '').toString().trim();
+const qText = (r['QuestionText'] || '').toString();
+if (!fk || !qText) continue;
+if (!questionsByFormKey[fk]) questionsByFormKey[fk] = [];
+questionsByFormKey[fk].push(r);
+}
+
+const outUpdates = [];
+
+for (let i = 0; i < formsRows.length; i++) {
+const rowObj = formsRows[i];
+const formKey = (rowObj['FormKey'] || '').toString().trim();
+if (!formKey) continue;
+
+// Safety: refuse to rebuild a form if we already have any responses recorded in the Responses sheet
+if (respondedFormKeys.has(formKey)) {
+  console.warn(`Refusing to rebuild FormKey=${formKey} because Responses sheet already contains responses for this FormKey.`);
+  continue;
+}
+
+const title = (rowObj['Title'] || '').toString();
+if (!title) {
+  console.log('Skipping FormKey ' + formKey + ': Title is empty.');
+  continue;
+}
+
+const templateFormId = (rowObj['TemplateFormId'] || '').toString().trim();
+const description = (rowObj['Description'] || '').toString();
+const thankYou = (rowObj['FinalThankYouMessage'] || '').toString();
+let formId = (rowObj['FormId'] || '').toString().trim();
+let form;
+
+if (!formId) {
+  if (templateFormId) {
+    const copyFile = DriveApp.getFileById(templateFormId).makeCopy(title);
+    form = FormApp.openById(copyFile.getId());
+    form.setTitle(title);
+  } else {
+    form = FormApp.create(title);
+  }
+  formId = form.getId();
+} else {
+  form = FormApp.openById(formId);
+  if (form.getTitle() !== title) form.setTitle(title);
+}
+
+// Form settings
+try { form.setIsQuiz(false); } catch (err) {}
+try { form.setCollectEmail(false); } catch (err) {}
+try { form.setRequireLogin(false); } catch (err) {} // may be domain-limited
+try { form.setLimitOneResponsePerUser(false); } catch (err) {}
+try { form.setShuffleQuestions(false); } catch (err) {}
+if (description) {
+  try { form.setDescription(description); } catch (err) {}
+}
+try { form.setConfirmationMessage(thankYou || ''); } catch (err) {}
+
+// Rebuild items: delete all
+const existingItems = form.getItems();
+for (let k = existingItems.length - 1; k >= 0; k--) {
+  form.deleteItem(existingItems[k]);
+}
+
+// Build items per question
+const qs = questionsByFormKey[formKey] || [];
+for (let qIndex = 0; qIndex < qs.length; qIndex++) {
+  const q = qs[qIndex];
+
+  const qText = (q['QuestionText'] || '').toString();
+  const qTypeRaw = (q['QuestionType'] || '').toString();
+  const qType = normalizeText_(qTypeRaw).toLowerCase();
+  const isText = (qType === 'short answer text' || qType === 'short answer' || qType === 'text' || qType === 'shortanswertext');
+
+  const newPageFlag = toBoolean_(q['NewPage']);
+  if (newPageFlag) {
+    form.addPageBreakItem();
+  }
+
+  if (isText) {
+    const item = form.addTextItem();
+    item.setTitle(qText).setRequired(true);
+
+    const validationRaw = (q['Validation'] || '').toString();
+    const validation = normalizeText_(validationRaw).toLowerCase();
+    if (validation === 'number') {
+      // Whole positive number (>0). To include zero, change pattern to: ^\d+$
+      const val = FormApp.createTextValidation()
+        .requireTextMatchesPattern('^[1-9]\\d*$')
+        .setHelpText('Please enter a whole positive number.');
+      item.setValidation(val.build());
+    }
+    continue;
+  }
+
+  // Default to Multiple Choice if not an explicit Text question
+  const item = form.addMultipleChoiceItem();
+  item.setTitle(qText);
+
+  // Build choices from up to 3 options, ignoring empties
+  const opt1 = (q['Answer Option 1'] || '').toString();
+  const opt2 = (q['Answer Option 2'] || '').toString();
+  const opt3 = (q['Answer Option 3'] || '').toString();
+
+  const choices = [];
+  if (opt1) choices.push(item.createChoice(opt1));
+  if (opt2) choices.push(item.createChoice(opt2));
+  if (opt3) choices.push(item.createChoice(opt3));
+
+// Optional Other: write-in
+const otherFlag = toBoolean_(q['OtherOption']);
+if (choices.length === 0 && !otherFlag) {
+console.warn('Skipping MC question with no options and no OtherOption:', qText);
+continue;
+}
+if (choices.length > 0) {
+item.setChoices(choices);
+}
+if (otherFlag) {
+// Prefer the correct method name; fall back just in case
+if (typeof item.showOtherOption === 'function') {
+item.showOtherOption(true);
+} else if (typeof item.setOtherOption === 'function') {
+item.setOtherOption(true);
+} else {
+console.warn('Form API has no showOtherOption/setOtherOption for:', qText);
+}
+}
+
+  try { item.setShuffleOptions(false); } catch (err) {}
+  item.setRequired(true);
+}
+
+// Write back FormId/EditUrl/LiveUrl if blank
+const editUrl = form.getEditUrl();
+const liveUrl = form.getPublishedUrl();
+
+const rowIndex = i + 2;
+const toSet = {};
+if (!rowObj['FormId']) toSet['FormId'] = formId;
+if (!rowObj['EditUrl']) toSet['EditUrl'] = editUrl;
+if (!rowObj['LiveUrl']) toSet['LiveUrl'] = liveUrl;
+if (Object.keys(toSet).length) outUpdates.push({ rowIndex, values: toSet });
+}
+
+if (outUpdates.length) {
+batchWriteObjectFields_(formsSheet, getHeaderMap_(formsSheet), outUpdates);
+}
+
+responsesSheet.getRange(1, 1, 1, CFG.RESPONSES_HEADER.length).setValues([CFG.RESPONSES_HEADER]);
+responsesSheet.getRange('D:D').setNumberFormat('yyyy-mm-dd hh:mm:ss');
+
+SpreadsheetApp.flush();
+console.log('Done: forms created/updated.');
+}
+
+// Batched sync: processes a slice of forms per run
+function syncNextBatchOfFormResponses() {
+  const lock = LockService.getScriptLock();
+if (!lock.tryLock(10000)) {
+Logger.log('Another sync run is in progress; exiting.');
+return;
+}
+try {
+  const ssId = PropertiesService.getScriptProperties().getProperty('HOST_SPREADSHEET_ID');
+  const ss = ssId ? SpreadsheetApp.openById(ssId) : SpreadsheetApp.getActiveSpreadsheet();
+  const responsesSheet = mustGetSheet_(ss, 'Responses');
+  const formsSheet = mustGetSheet_(ss, 'Forms');
+  const questionsSheet = mustGetSheet_(ss, 'Questions');
+
+  const formsHeader = getHeaderMap_(formsSheet);
+  const questionsHeader = getHeaderMap_(questionsSheet);
+
+  const allFormsRows = getDataRowsAsObjects_(formsSheet, formsHeader)
+    .filter(r => (r['FormId'] || '').toString().trim());
+
+  const props = PropertiesService.getScriptProperties();
+  const totalForms = allFormsRows.length;
+  if (totalForms === 0) {
+    Logger.log('No forms with FormId present. Nothing to sync.');
+    return;
+  }
+
+  const defaultBatchSize = 20; // tune as needed
+  const batchSize = parseInt(props.getProperty('SYNC_BATCH_SIZE') || String(defaultBatchSize), 10) || defaultBatchSize;
+
+  let startIndex = parseInt(props.getProperty('SYNC_START_INDEX') || '0', 10);
+  if (isNaN(startIndex) || startIndex < 0 || startIndex >= totalForms) {
+    startIndex = 0;
+  }
+
+  const endIndex = Math.min(totalForms, startIndex + batchSize);
+  Logger.log(`Syncing forms index range [${startIndex}, ${endIndex}) of ${totalForms} total.`);
+
+  // Build map: per FormKey => normalized title -> { qid }
+  const questionsRows = getDataRowsAsObjects_(questionsSheet, questionsHeader);
+  const questionsByFormKey = new Map();
+  for (const r of questionsRows) {
+    const fk = (r['FormKey'] || '').toString().trim();
+    const titleKey = normalizeText_(r['QuestionText']);
+    const qid = (r['QuestionID'] || '').toString();
+    if (!fk || !titleKey || !qid) continue;
+    if (!questionsByFormKey.has(fk)) questionsByFormKey.set(fk, new Map());
+    questionsByFormKey.get(fk).set(titleKey, { qid: qid });
+  }
+
+  const dedupSet = buildExistingResponseKeySet_(responsesSheet);
+  const rowsToAppend = [];
+  const startMs = Date.now();
+  const maxMillis = 4.5 * 60 * 1000; // safety against 6-minute limit
+
+  let lastProcessedIndex = startIndex - 1; // track how far we got
+
+  for (let i = startIndex; i < endIndex; i++) {
+    const f = allFormsRows[i];
+    const formId = (f['FormId'] || '').toString().trim();
+    const formKey = (f['FormKey'] || '').toString().trim();
+    if (!formId || !formKey) {
+      lastProcessedIndex = i;
+      continue;
+    }
+
+    let form;
+    try {
+      form = FormApp.openById(formId);
+    } catch (e) {
+      console.warn('Cannot open formId: ' + formId + ' ' + e);
+      lastProcessedIndex = i;
+      continue;
+    }
+
+        const lastTsKey = 'LAST_TS_' + formId;
+    const lastIdKey = 'LAST_ID_' + formId;
+
+    const lastTsStr = props.getProperty(lastTsKey);
+    const lastIdStr = (props.getProperty(lastIdKey) || '').toString().trim();
+
+    const lastTsMs = lastTsStr ? Number(lastTsStr) : NaN;
+    const lastTs = isFinite(lastTsMs) ? new Date(lastTsMs) : null;
+
+    const mapByTitle = questionsByFormKey.get(formKey) || new Map();
+
+    // Fetch responses since last timestamp (inclusive behavior is handled below)
+    const responses = lastTs ? form.getResponses(lastTs) : form.getResponses(); // chronological
+    if (!mapByTitle || mapByTitle.size === 0) {
+      Logger.log('No question mapping for FormKey=' + formKey + ' (map size 0).');
+    }
+    Logger.log('FormKey=' + formKey + ' fetched=' + responses.length + ' responses; lastTs=' + (lastTs ? new Date(lastTs).toISOString() : 'null'));
+
+    // Track newest processed (ts + id) but only when at least one item matched
+    let newestTs = null;
+    let newestId = '';
+    let matchedAnyForForm = false;
+    let processedResponsesCount = 0;
+    let skippedAlreadyCount = 0;
+
+    for (const fr of responses) {
+      const ts = fr.getTimestamp();
+      const submissionId = fr.getId();
+
+      // Only process responses newer than the last checkpoint,
+      // OR those at the same timestamp but with a different response ID.
+      if (lastTs) {
+        const t = ts.getTime();
+        const lt = lastTs.getTime();
+
+        if (t < lt) continue;
+        if (t === lt && lastIdStr && submissionId === lastIdStr) {
+          skippedAlreadyCount++;
+          continue;
+        }
+      }
+
+      processedResponsesCount++;
+
+      const itemResponses = fr.getItemResponses();
+      let matchedThisResponse = false;
+
+      for (const ir of itemResponses) {
+        const item = ir.getItem();
+        const titleKey = normalizeText_(item.getTitle());
+        if (!titleKey) continue; // skip untitled/blank items
+        const meta = mapByTitle.get(titleKey);
+        if (!meta) continue; // unknown question
+
+        const itemType = item.getType();
+        let answerOut = '';
+
+        if (itemType === FormApp.ItemType.MULTIPLE_CHOICE) {
+          const mc = item.asMultipleChoiceItem();
+          const resp = (ir.getResponse() || '').toString();
+          const choices = mc.getChoices().map(c => (c.getValue() || '').toString());
+          const idx = choices.indexOf(resp);
+          if (idx >= 0) {
+            answerOut = String(idx + 1);
+          } else {
+            // likely "Other" write-in
+            answerOut = resp ? ('Other: ' + resp) : '';
+          }
+        } else if (itemType === FormApp.ItemType.TEXT) {
+          answerOut = (ir.getResponse() || '').toString();
+        } else {
+          answerOut = ('' + ir.getResponse());
+        }
+
+        // Dedup key: FormKey|RespondentId|QuestionID
+        const dedupKey = formKey + '|' + submissionId + '|' + meta.qid;
+        if (!dedupSet.has(dedupKey)) {
+          rowsToAppend.push([formKey, meta.qid, submissionId, ts, answerOut]);
+          dedupSet.add(dedupKey);
+        }
+        matchedThisResponse = true;
+        matchedAnyForForm = true;
+      }
+
+      // Only advance checkpoint when at least one item in this response matched
+      if (matchedThisResponse) {
+        if (!newestTs || ts.getTime() > newestTs.getTime()) {
+          newestTs = ts;
+          newestId = submissionId;
+        } else if (newestTs && ts.getTime() === newestTs.getTime()) {
+          newestId = submissionId;
+        }
+      }
+    }
+
+    // Only set LAST_TS/LAST_ID if we actually matched something for this form
+    if (matchedAnyForForm && newestTs) {
+      props.setProperty(lastTsKey, String(newestTs.getTime()));
+      props.setProperty(lastIdKey, String(newestId || ''));
+    } else if (processedResponsesCount > 0 && !matchedAnyForForm) {
+      Logger.log('FormKey=' + formKey + ' had responses but no items matched Questions mapping.');
+    } else if (processedResponsesCount === 0 && responses.length > 0 && skippedAlreadyCount === responses.length) {
+      Logger.log('FormKey=' + formKey + ' had only already-processed responses at the checkpoint; no updates.');
+    }
+
+    lastProcessedIndex = i;
+
+    // Time safeguard
+    if (Date.now() - startMs > maxMillis) {
+      Logger.log('Stopping early due to time limit, at form index ' + i);
+      break;
+    }
+  }
+
+    // Write any new response rows
+  if (rowsToAppend.length) {
+    const startRow = responsesSheet.getLastRow() + 1;
+    responsesSheet.getRange(startRow, 1, rowsToAppend.length, 5).setValues(rowsToAppend);
+    Logger.log('Appended ' + rowsToAppend.length + ' rows to Responses.');
+  } else {
+    Logger.log('No new rows to append for this batch.');
+  }
+
+  // --- Update SYNC_START_INDEX correctly ---
+
+  let nextIndex;
+  if (lastProcessedIndex < startIndex) {
+    // Nothing was processed (unlikely, but just in case); move to next slice anyway.
+    nextIndex = endIndex;
+  } else {
+    nextIndex = lastProcessedIndex + 1;
+  }
+
+  if (nextIndex >= totalForms) {
+    // Wrap around when we reach the end
+    nextIndex = 0;
+  }
+
+  props.setProperty('SYNC_START_INDEX', String(nextIndex));
+Logger.log('Next sync start index will be ' + nextIndex);
+
+// Ensure any sheet formulas (e.g., StillNeeded) recalc before we read
+SpreadsheetApp.flush();
+  // --- After syncing Responses, update Forms!MaxRedirects only for rows we actually processed ---
+  try {
+    if (lastProcessedIndex >= startIndex) {
+      // Data rows start at sheet row 2
+      const processedBatchStartRow = startIndex + 2;           // inclusive
+      const processedBatchEndRow = lastProcessedIndex + 2;     // inclusive
+
+      updateMaxRedirectsForBatch_(formsSheet, formsHeader, processedBatchStartRow, processedBatchEndRow);
+      SpreadsheetApp.flush();
+    } else {
+      Logger.log('No forms processed in this batch; skipping MaxRedirects update.');
+    }
+  } catch (e) {
+    Logger.log('MaxRedirects batch update failed: ' + e);
+  }
+
+// --- Completion check: disable 10-min sync when StillNeeded sum is zero ---
+try {
+const allReached = areAllRespondentTargetsReached_(ss);
+
+  if (allReached) {
+  disable10minSync();
+  Logger.log('All targets reached (StillNeeded sum is zero). 10-minute sync disabled.');
+  } else {
+  Logger.log('StillNeeded > 0 remains. 10-minute sync remains enabled (if previously enabled).');
+  }
+  } catch (e) {
+  Logger.log('Completion check failed: ' + e);
+  }
+  } finally {
+try { lock.releaseLock(); } catch (e) {}
+}
+}
+
+// Helper: normalize text to improve title matching
+function normalizeText_(s) {
+return (s == null ? '' : String(s))
+.replace(/\u00A0/g, ' ') // non-breaking space -> space
+.replace(/\s+/g, ' ') // collapse whitespace
+.trim();
+}
+
+// Optional: clear remembered last timestamps (forces full resync next run)
+function resetResponseSyncState() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  for (const k in all) {
+    if (k.indexOf('LAST_TS_') === 0) props.deleteProperty(k);
+    if (k.indexOf('LAST_ID_') === 0) props.deleteProperty(k);
+  }
+  console.log('Cleared LAST_TS_* and LAST_ID_* properties. Next sync will re-scan all responses.');
+}
+
+// Ensure Responses sheet exists with header
+function ensureResponsesSheet_(ss, sheetName, header) {
+let sh = ss.getSheetByName(sheetName);
+if (!sh) {
+sh = ss.insertSheet(sheetName);
+sh.getRange(1, 1, 1, header.length).setValues([header]);
+} else {
+const lr = sh.getLastRow();
+if (lr === 0) {
+sh.getRange(1, 1, 1, header.length).setValues([header]);
+} else {
+const existing = sh.getRange(1, 1, 1, header.length).getValues()[0];
+const toSet = [];
+for (let i = 0; i < header.length; i++) {
+toSet.push(header[i] || existing[i] || '');
+}
+sh.getRange(1, 1, 1, header.length).setValues([toSet]);
+}
+}
+return sh;
+}
+
+// Sheet helpers
+function mustGetSheet_(ss, name) {
+const sh = ss.getSheetByName(name);
+if (!sh) throw new Error('Missing sheet: ' + name);
+return sh;
+}
+
+function getHeaderMap_(sheet) {
+const lastCol = sheet.getLastColumn();
+if (lastCol === 0) return {};
+const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+const map = {};
+for (let c = 0; c < headers.length; c++) {
+map[(headers[c] || '').toString().trim()] = c + 1; // 1-based
+}
+return map;
+}
+
+function getDataRowsAsObjects_(sheet, headerMap) {
+const lastRow = sheet.getLastRow();
+const lastCol = sheet.getLastColumn();
+if (lastRow < 2 || lastCol === 0) return [];
+const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+const headers = Object.keys(headerMap);
+const out = [];
+for (let r = 0; r < values.length; r++) {
+const row = values[r];
+const obj = {};
+for (const h of headers) {
+const c = headerMap[h] - 1;
+obj[h] = row[c];
+}
+out.push(obj);
+}
+return out;
+}
+
+// Returns a Set of FormKey values that already appear in the Responses sheet.
+// This is used as a safety guard to prevent rebuilding (which deletes form items)
+// after any responses have been collected.
+function getRespondedFormKeysFromResponses_(responsesSheet) {
+  const lastRow = responsesSheet.getLastRow();
+  if (lastRow < 2) return new Set();
+
+  // Expect FormKey in col 1
+  const formKeys = responsesSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  const out = new Set();
+  for (const [fk] of formKeys) {
+    const s = (fk || '').toString().trim();
+    if (s) out.add(s);
+  }
+  return out;
+}
+
+// Build a set of existing response keys (FormKey|RespondentId|QuestionID)
+// so repeated runs do not duplicate rows.
+function buildExistingResponseKeySet_(responsesSheet) {
+  const lastRow = responsesSheet.getLastRow();
+  const set = new Set();
+  if (lastRow < 2) return set;
+
+  // Columns: 1=FormKey, 2=QuestionID, 3=RespondentId
+  const vals = responsesSheet.getRange(2, 1, lastRow - 1, 3).getValues();
+  for (const row of vals) {
+    const fk = (row[0] || '').toString().trim();
+    const qid = (row[1] || '').toString().trim();
+    const rid = (row[2] || '').toString().trim();
+    if (!fk || !qid || !rid) continue;
+    set.add(fk + '|' + rid + '|' + qid);
+  }
+  return set;
+}
+
+function batchWriteObjectFields_(sheet, headerMap, updates) {
+  if (!updates || updates.length === 0) return;
+
+  for (const up of updates) {
+    const row = Number(up.rowIndex);
+    if (!isFinite(row) || row < 2 || !up.values) continue;
+
+    for (const key of Object.keys(up.values)) {
+      const col = headerMap[key];
+      if (!col) continue; // unknown header, skip
+
+      sheet.getRange(row, col).setValue(up.values[key]);
+    }
+  }
+}
+
+// Small helper: truthy parsing for sheet flags (True/False, Yes/No, 1/0, timestamps)
+function toBoolean_(v) {
+const s = normalizeText_(v).toLowerCase();
+return s === 'true' || s === 'yes' || s === 'y' || s === '1';
+}
+
+function coerceSheetDateTime_(value) {
+if (value instanceof Date && !isNaN(value)) return value;
+if (value == null || value === '') return null;
+
+if (typeof value === 'number' && isFinite(value)) {
+const fromNumber = new Date(value);
+if (!isNaN(fromNumber)) return fromNumber;
+}
+
+const str = String(value).trim();
+if (!str) return null;
+
+const candidates = [str];
+if (str.includes(' ') && !str.includes('T')) {
+candidates.push(str.replace(' ', 'T'));
+}
+
+for (const candidate of candidates) {
+const parsed = new Date(candidate);
+if (!isNaN(parsed)) return parsed;
+}
+
+const match = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+if (match) {
+const [, year, month, day, hour = '0', minute = '0', second = '0'] = match;
+const fallback = new Date(
+Number(year),
+Number(month) - 1,
+Number(day),
+Number(hour),
+Number(minute),
+Number(second)
+);
+if (!isNaN(fallback)) return fallback;
+}
+
+Logger.log('Unable to parse LastRedirect timestamp: ' + str);
+return null;
+}
+
+function buildNext10Forms() {
+buildNextNForms(10);
+}
+
+function buildNext5Forms() {
+buildNextNForms(5);
+}
+
+function buildNext3Forms() {
+buildNextNForms(3);
+}
+
+function buildNext2Forms() {
+buildNextNForms(2);
+}
+
+function buildNextNForms(n) {
+n = Math.max(1, Math.floor(Number(n) || 10));
+const props = PropertiesService.getScriptProperties();
+const startIdx = parseInt(props.getProperty('BUILD_START_INDEX') || '0', 10);
+const processed = buildFormsFromSheetBatch_(startIdx, n);
+props.setProperty('BUILD_START_INDEX', String(startIdx + processed));
+Logger.log('Processed ' + processed + ' form(s) starting at index ' + startIdx + '. Next start index: ' + (startIdx + processed));
+if (processed === 0) {
+Logger.log('No more forms to process. You may reset with resetBuildBatchProgress().');
+}
+}
+
+function resetBuildBatchProgress() {
+PropertiesService.getScriptProperties().deleteProperty('BUILD_START_INDEX');
+Logger.log('Batch build pointer reset. Next batch starts from the first form.');
+}
+
+function buildFormsFromSheetBatch_(startIndex, maxCount) {
+const CFG = {
+SHEET_FORMS: 'Forms',
+SHEET_QUESTIONS: 'Questions',
+SHEET_RESPONSES: 'Responses',
+RESPONSES_HEADER: ['FormKey','QuestionID','RespondentId','Timestamp','Answer']
+};
+
+const props = PropertiesService.getScriptProperties();
+const hostId = props.getProperty('HOST_SPREADSHEET_ID');
+const ss = hostId ? SpreadsheetApp.openById(hostId) : SpreadsheetApp.getActiveSpreadsheet();
+// Only set the property if it isn’t already set
+if (!hostId) props.setProperty('HOST_SPREADSHEET_ID', ss.getId());
+
+const formsSheet = mustGetSheet_(ss, CFG.SHEET_FORMS);
+const questionsSheet = mustGetSheet_(ss, CFG.SHEET_QUESTIONS);
+const responsesSheet = ensureResponsesSheet_(ss, CFG.SHEET_RESPONSES, CFG.RESPONSES_HEADER);
+// Safety: build a set of FormKeys that already have responses; skip rebuilding those
+const respondedFormKeys = getRespondedFormKeysFromResponses_(responsesSheet);
+
+const formsHeader = getHeaderMap_(formsSheet);
+const formsRows = getDataRowsAsObjects_(formsSheet, formsHeader);
+
+// Bounds
+if (startIndex >= formsRows.length) return 0;
+const endIndex = Math.min(formsRows.length, startIndex + maxCount);
+
+const questionsHeader = getHeaderMap_(questionsSheet);
+const questionsRowsRaw = getDataRowsAsObjects_(questionsSheet, questionsHeader);
+
+// Group questions by FormKey
+const questionsByFormKey = {};
+for (const r of questionsRowsRaw) {
+const fk = (r['FormKey'] || '').toString().trim();
+const qText = (r['QuestionText'] || '').toString();
+if (!fk || !qText) continue;
+if (!questionsByFormKey[fk]) questionsByFormKey[fk] = [];
+questionsByFormKey[fk].push(r);
+}
+
+const outUpdates = [];
+let processed = 0;
+
+for (let i = startIndex; i < endIndex; i++) {
+const rowObj = formsRows[i];
+const formKey = (rowObj['FormKey'] || '').toString().trim();
+if (!formKey) continue;
+// Skip rebuild if any responses already exist for this FormKey (in Responses sheet)
+if (respondedFormKeys.has(formKey)) {
+Logger.log('Skipping rebuild for FormKey=' + formKey + ' because Responses sheet already has data.');
+continue;
+}
+
+const title = (rowObj['Title'] || '').toString();
+if (!title) {
+console.log('Skipping FormKey ' + formKey + ': Title is empty.');
+continue;
+}
+
+const templateFormId = (rowObj['TemplateFormId'] || '').toString().trim();
+const description = (rowObj['Description'] || '').toString();
+const thankYou = (rowObj['FinalThankYouMessage'] || '').toString();
+let formId = (rowObj['FormId'] || '').toString().trim();
+let form;
+
+if (!formId) {
+  if (templateFormId) {
+    const copyFile = DriveApp.getFileById(templateFormId).makeCopy(title);
+    form = FormApp.openById(copyFile.getId());
+    form.setTitle(title);
+  } else {
+    form = FormApp.create(title);
+  }
+  formId = form.getId();
+} else {
+  form = FormApp.openById(formId);
+  if (form.getTitle() !== title) form.setTitle(title);
+}
+
+// Form settings
+try { form.setIsQuiz(false); } catch (err) {}
+try { form.setCollectEmail(false); } catch (err) {}
+try { form.setRequireLogin(false); } catch (err) {}
+try { form.setLimitOneResponsePerUser(false); } catch (err) {}
+try { form.setShuffleQuestions(false); } catch (err) {}
+if (description) { try { form.setDescription(description); } catch (err) {} }
+try { form.setConfirmationMessage(thankYou || ''); } catch (err) {}
+
+// Rebuild items: delete all
+const existingItems = form.getItems();
+for (let k = existingItems.length - 1; k >= 0; k--) {
+  form.deleteItem(existingItems[k]);
+}
+
+// Build items for this form
+const qs = questionsByFormKey[formKey] || [];
+for (let qIndex = 0; qIndex < qs.length; qIndex++) {
+  const q = qs[qIndex];
+
+  const qText = (q['QuestionText'] || '').toString();
+  const qTypeRaw = (q['QuestionType'] || '').toString();
+  const qType = normalizeText_(qTypeRaw).toLowerCase();
+  const isText = (qType === 'short answer text' || qType === 'short answer' || qType === 'text' || qType === 'shortanswertext');
+
+  const newPageFlag = toBoolean_(q['NewPage']);
+  if (newPageFlag) form.addPageBreakItem();
+
+  if (isText) {
+    const item = form.addTextItem();
+    item.setTitle(qText).setRequired(true);
+
+    const validationRaw = (q['Validation'] || '').toString();
+    const validation = normalizeText_(validationRaw).toLowerCase();
+    if (validation === 'number') {
+      const val = FormApp.createTextValidation()
+        .requireTextMatchesPattern('^[1-9]\\d*$')
+        .setHelpText('Please enter a whole positive number.');
+      item.setValidation(val.build());
+    }
+    continue;
+  }
+
+  // Default to Multiple Choice
+  const item = form.addMultipleChoiceItem();
+  item.setTitle(qText);
+
+  // Options (ignore empties)
+  const opt1 = (q['Answer Option 1'] || '').toString();
+  const opt2 = (q['Answer Option 2'] || '').toString();
+  const opt3 = (q['Answer Option 3'] || '').toString();
+
+  const choices = [];
+  if (opt1) choices.push(item.createChoice(opt1));
+  if (opt2) choices.push(item.createChoice(opt2));
+  if (opt3) choices.push(item.createChoice(opt3));
+
+  const otherFlag = toBoolean_(q['OtherOption']);
+  if (choices.length === 0 && !otherFlag) {
+    console.warn('Skipping MC question with no options and no OtherOption:', qText);
+    continue;
+  }
+  if (choices.length > 0) item.setChoices(choices);
+
+  if (otherFlag) {
+    if (typeof item.showOtherOption === 'function') {
+      item.showOtherOption(true);
+    } else if (typeof item.setOtherOption === 'function') {
+      item.setOtherOption(true);
+    } else {
+      console.warn('Form API has no showOtherOption/setOtherOption for:', qText);
+    }
+  }
+
+  try { item.setShuffleOptions(false); } catch (err) {}
+  item.setRequired(true);
+}
+
+// Write back IDs/URLs if blank
+const editUrl = form.getEditUrl();
+const liveUrl = form.getPublishedUrl();
+
+const rowIndex = i + 2; // 1-based sheet row index
+const toSet = {};
+if (!rowObj['FormId']) toSet['FormId'] = formId;
+if (!rowObj['EditUrl']) toSet['EditUrl'] = editUrl;
+if (!rowObj['LiveUrl']) toSet['LiveUrl'] = liveUrl;
+if (Object.keys(toSet).length) outUpdates.push({ rowIndex, values: toSet });
+
+processed++;
+}
+
+if (outUpdates.length) {
+batchWriteObjectFields_(formsSheet, getHeaderMap_(formsSheet), outUpdates);
+}
+
+responsesSheet.getRange(1, 1, 1, CFG.RESPONSES_HEADER.length).setValues([CFG.RESPONSES_HEADER]);
+responsesSheet.getRange('D:D').setNumberFormat('yyyy-mm-dd hh:mm:ss');
+SpreadsheetApp.flush();
+
+return processed;
+}
+
+function countGeneratedAndPublishedForms() {
+  const ss = SpreadsheetApp.getActive();
+  const formsSheet = mustGetSheet_(ss, 'Forms');
+  const header = getHeaderMap_(formsSheet);
+  const rows = getDataRowsAsObjects_(formsSheet, header);
+
+  let generated = 0;
+  let published = 0;
+  let unableToOpen = 0;
+
+  for (const r of rows) {
+    const raw = (r['FormId'] || '').toString().trim();
+    if (!raw) continue;
+
+    generated++;
+
+    // Accept either ID or URL
+    const m = raw.match(/forms\/d\/([^/]+)/);
+    const formId = m ? m[1] : raw;
+
+    try {
+      const form = FormApp.openById(formId);
+      if (form.isAcceptingResponses()) {
+        published++;
+      }
+    } catch (e) {
+      unableToOpen++;
+      Logger.log(`Cannot open formId ${formId}: ${e.message}`);
+    }
+  }
+
+  Logger.log(`Forms generated: ${generated}`);
+  Logger.log(`Forms published (accepting responses): ${published}`);
+  if (unableToOpen) {
+    Logger.log(`Forms unable to open: ${unableToOpen}`);
+  }
+
+  return { generated, published, unableToOpen };
+}
+
+function getSyncBatchSettings() {
+  const props = PropertiesService.getScriptProperties();
+  const startIndex = parseInt(props.getProperty('SYNC_START_INDEX') || '0', 10);
+  const batchSize = parseInt(props.getProperty('SYNC_BATCH_SIZE') || '20', 10);
+  Logger.log('SYNC_START_INDEX = ' + startIndex + ', SYNC_BATCH_SIZE = ' + batchSize);
+}
+
+function setSyncBatchSize(size) {
+  size = Math.max(1, Math.floor(Number(size) || 1));
+  PropertiesService.getScriptProperties().setProperty('SYNC_BATCH_SIZE', String(size));
+  Logger.log('SYNC_BATCH_SIZE set to ' + size);
+}
+
+function setSyncBatchSize_3() {
+  setSyncBatchSize(3);
+}
+
+function setSyncBatchSize_25() {
+  setSyncBatchSize(25);
+}
+
+function resetSyncStartIndex() {
+  PropertiesService.getScriptProperties().deleteProperty('SYNC_START_INDEX');
+  Logger.log('SYNC_START_INDEX cleared (will start from 0 next run).');
+}
+
+function enable10minSync() {
+
+  const handler = 'syncNextBatchOfFormResponses';
+
+  // Remove existing CLOCK triggers for this handler to avoid duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const t of triggers) {
+    if (t.getHandlerFunction() === handler && t.getEventType() === ScriptApp.EventType.CLOCK) {
+      ScriptApp.deleteTrigger(t);
+    }
+  }
+
+  // Reset checkpoints before scheduling the periodic sync
+  try {
+    resetResponseSyncState();
+    resetSyncStartIndex();
+    Logger.log('Sync checkpoints reset before enabling 10-minute trigger.');
+  } catch (e) {
+    Logger.log('Could not reset sync checkpoints: ' + e);
+  }
+
+  // Create 10-minute time-based trigger
+  ScriptApp.newTrigger(handler).timeBased().everyMinutes(10).create();
+  Logger.log('10-minute sync enabled. Run this manually from the editor when needed.');
+}
+
+function disable10minSync() {
+const handler = 'syncNextBatchOfFormResponses';
+const triggers = ScriptApp.getProjectTriggers();
+let removed = 0;
+for (const t of triggers) {
+if (t.getHandlerFunction() === handler && t.getEventType() === ScriptApp.EventType.CLOCK) {
+ScriptApp.deleteTrigger(t);
+removed++;
+}
+}
+Logger.log('10-minute sync disabled. Removed ' + removed + ' trigger(s).');
+}
+
+function areAllRespondentTargetsReached_(ss) {
+const formsSheet = mustGetSheet_(ss, 'Forms');
+const header = getHeaderMap_(formsSheet);
+
+if (!('StillNeeded' in header)) {
+Logger.log('StillNeeded column missing; skipping completion check.');
+return false;
+}
+
+const lastRow = formsSheet.getLastRow();
+if (lastRow < 2) return false; // no data rows
+
+const col = header['StillNeeded'];
+const vals = formsSheet.getRange(2, col, lastRow - 1, 1).getValues();
+
+// Sum only positive numbers; blanks count as 0
+let positiveSum = 0;
+for (const [v] of vals) {
+if (v === '' || v == null) continue;
+const n = Number(v);
+if (isFinite(n) && n > 0) positiveSum += n;
+}
+
+// Target is reached when nothing positive remains
+return positiveSum === 0;
+}
+
+/**
+ * For a contiguous batch of Forms sheet rows, set:
+ *   MaxRedirects = Redirects + StillNeeded
+ *
+ * Assumes sheet has headers: Redirects, StillNeeded, MaxRedirects
+ * startRowIndex / endRowIndex are 1-based sheet row numbers (inclusive).
+ */
+function updateMaxRedirectsForBatch_(formsSheet, headerMap, startRowIndex, endRowIndex) {
+  const colRedirects = headerMap['Redirects'];
+  const colStillNeeded = headerMap['StillNeeded'];
+  const colMaxRedirects = headerMap['MaxRedirects'];
+  const colLastRedirect = headerMap['LastRedirect'];
+
+  if (!colRedirects || !colStillNeeded || !colMaxRedirects) {
+    Logger.log('Missing one of required columns: Redirects, StillNeeded, MaxRedirects. Skipping MaxRedirects update.');
+    return;
+  }
+
+  const numRows = endRowIndex - startRowIndex + 1;
+  if (numRows <= 0) return;
+
+  const redirectsVals = formsSheet.getRange(startRowIndex, colRedirects, numRows, 1).getValues();
+  const stillNeededVals = formsSheet.getRange(startRowIndex, colStillNeeded, numRows, 1).getValues();
+  const currentMaxVals = formsSheet.getRange(startRowIndex, colMaxRedirects, numRows, 1).getValues();
+  const lastRedirectVals = colLastRedirect
+    ? formsSheet.getRange(startRowIndex, colLastRedirect, numRows, 1).getValues()
+    : null;
+
+  const MIN_DELAY_MS = 30 * 60 * 1000;
+  const nowMs = Date.now();
+  const out = new Array(numRows);
+
+  for (let i = 0; i < numRows; i++) {
+    const redirectNum = Number(redirectsVals[i][0] || 0);
+    const stillNeededNum = Number(stillNeededVals[i][0] || 0);
+    const rr = isFinite(redirectNum) ? redirectNum : 0;
+    const ss = isFinite(stillNeededNum) ? stillNeededNum : 0;
+    const computedMax = rr + ss;
+
+    let canUpdate = true;
+    if (lastRedirectVals) {
+      const lastDate = coerceSheetDateTime_(lastRedirectVals[i][0]);
+      if (lastDate) {
+        const diff = nowMs - lastDate.getTime();
+        if (diff < MIN_DELAY_MS) {
+          canUpdate = false;
+        }
+      }
+    }
+
+    out[i] = [canUpdate ? computedMax : currentMaxVals[i][0]];
+  }
+
+  formsSheet.getRange(startRowIndex, colMaxRedirects, numRows, 1).setValues(out);
+}
