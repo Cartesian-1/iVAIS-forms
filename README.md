@@ -78,6 +78,8 @@ One form in `Forms` is selected for a redirect by the following logic:
 
 **Specify all forms metadata in the `Forms` tab of the main survey sheet:**  
 
+This description is based on 1,000 - 2,000 questions divided between 100 forms with 10 - 20 questions each. Larger volumes are possible, but results may vary due to timing issues and cloud limitations.  
+
 `FormKey`	 For each form you want to build, specify for each row a unique natural number in a rising sequence.  
 `TemplateFormId`	If you want to use a template for visual style, create a Google Forms template in that style, publish it, and enter the key after /spreadsheets/d/ in the template live URL.    
 `Title`	 The form title.  
