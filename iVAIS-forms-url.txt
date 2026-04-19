@@ -33,18 +33,23 @@ function doGet(e) {
 }
 
 function htmlRedirect_(url) {
-  // Produces a minimal HTML page that immediately redirects the browser to the target URL.
+  // Redirects the top-level browser window to escape the Apps Script iframe sandbox.
   var safe = encodeURI(String(url));
   var html =
     '<!doctype html><html><head><meta charset="utf-8">' +
-    '<meta http-equiv="refresh" content="0;url=' + safe + '">' +
-    '<title>Redirecting…</title></head><body>' +
-    '<p>If you are not redirected, <a href="' + safe + '">click here</a>.</p>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Redirecting…</title>' +
+    '<script>' +
+    'try { window.top.location.replace("' + safe + '"); } ' +
+    'catch(e) { window.location.replace("' + safe + '"); }' +
+    '</script>' +
+    '</head><body>' +
+    '<p>Redirecting to the form…</p>' +
+    '<p><a href="' + safe + '" target="_top">Tap here if you are not redirected</a></p>' +
     '</body></html>';
 
   return HtmlService.createHtmlOutput(html)
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .setTitle('Redirecting…');
+    .setTitle('Survey Form');
 }
 
 function selectAndIncrement_(sheet) {
@@ -103,11 +108,12 @@ function selectAndIncrement_(sheet) {
   var rowNumber = best.rowIndex + 1;
   var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 
-  sheet.getRange(rowNumber, idxRedirects + 1).setValue(best.redirects + 1);
+    sheet.getRange(rowNumber, idxRedirects + 1).setValue(best.redirects + 1);
   if (idxLastRedirect >= 0) {
     sheet.getRange(rowNumber, idxLastRedirect + 1).setValue(timestamp);
   }
 
+    SpreadsheetApp.flush();
   return { url: best.url };
 }
 
