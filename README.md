@@ -8,7 +8,7 @@ These tools were created as part of the iVAIS project.
 
 # The main survey sheet
 
-**The main survey sheet is where all data is stored: survey questions, forms data, form redirects, and responses.**    
+**The main survey sheet is where all data is stored: survey questions, forms data, redirects, and responses.**    
 
 Create a Google Sheet with three tabs named: `Forms`, `Questions`, and `Responses`.  
 
@@ -18,7 +18,7 @@ Create a Google Sheet with three tabs named: `Forms`, `Questions`, and `Response
 The first 8 columns are forms data, and the last 8 columns are for handling redirect logic and responses.
 
 The `Answers` column must contain this formula (I2 example): `=COUNTIF(Responses!$A:$A,$A2)`  
-The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the number of questions in the form.  
+The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the number of questions in the form (including background questions, etc.).  
 The `StillNeeded` column must contain this formula (P2 example): `=MAX($N2-$J2+$O2,0)`  
 
 **The `Questions` tab must have these column headers (A1-J1):**   
@@ -78,7 +78,7 @@ One form in `Forms` is selected for a redirect by the following logic:
 
 **Specify all forms metadata in the `Forms` tab of the main survey sheet:**  
 
-This description is based on 1,000 - 2,000 questions divided between 100 forms with 10 - 20 questions each. Larger volumes are possible, but results may vary due to timing and cloud platform limitations.  
+This description is based on 1,000 different questions plus 6 background questions divided between 100 forms with 16 questions each. Larger volumes are possible, but results may vary due to timing and cloud platform limitations.  
 
 `FormKey`	 For each form you want to build, specify for each row a unique natural number in a rising sequence.  
 `TemplateFormId`	If you want to use a template for visual style, create a Google Forms template in that style, publish it, and enter the key after /spreadsheets/d/ in the template live URL.    
