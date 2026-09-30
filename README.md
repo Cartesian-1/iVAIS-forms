@@ -19,7 +19,7 @@ The first 8 columns are forms data, and the last 8 columns are for handling redi
 
 The `Answers` column must contain this formula (I2 example): `=COUNTIF(Responses!$A:$A,$A2)`  
 The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the number of questions in the form (including background questions, etc.).  
-Leave the values in the Redirects, MaxRedirects, and LastRedirect columns blank.  
+Leave the values in the `Redirects`, `MaxRedirects`, and `LastRedirect` columns blank.  
 The `StillNeeded` column must contain this formula (P2 example): `=MAX($N2-$J2+$O2,0)`  
 
 **The `Questions` tab must have these column headers (A1-J1):**   
