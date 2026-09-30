@@ -18,7 +18,7 @@ Create a Google Sheet with three tabs named: `Forms`, `Questions`, and `Response
 The first 8 columns are forms data, and the last 8 columns are for handling redirect logic and responses.
 
 The `Answers` column must contain this formula (I2 example): `=COUNTIF(Responses!$A:$A,$A2)`  
-The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the number of questions in the form (including background questions, etc.).
+The `Respondents` column must contain this formula (J2 example): `=$I2/N` where N is the number of questions in the form (including background questions, etc.).  
 Leave the `Redirects`, `MaxRedirects`, and `LastRedirect` column with empty values.  
 The `StillNeeded` column must contain this formula (P2 example): `=MAX($N2-$J2+$O2,0)`  
 
